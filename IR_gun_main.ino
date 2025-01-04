@@ -30,7 +30,7 @@ enum DISPLAY_STATE {
 DISPLAY_STATE current_display;
 DISPLAY_STATE prev_display;
 
-TFT_eSPI_Button load, collect;
+TFT_eSPI_Button load, collect, menu;
 
 void setup() {
   
@@ -42,6 +42,8 @@ void setup() {
     SPIFFS.format();
     SPIFFS.begin();
   }
+  
+  add_test_file();
 
   // Initialise the TFT screen
   tft.init();
@@ -75,6 +77,10 @@ void loop() {
   
       case MENU:
         handle_menu(x,y);
+        break;
+
+      case LOAD:
+        handle_load(x,y);
         break;
 
       default:
@@ -116,6 +122,26 @@ void handle_menu(uint16_t x, uint16_t y) {
   if(collect.contains(x,y)){
 
     current_display = WRITE;
+    return;
+    
+  }
+  
+}
+
+void handle_load(uint16_t x, uint16_t y) {
+
+  tft.setFreeFont(LABEL1_FONT);
+  
+  menu.initButton(&tft, 50,
+                          30, // x, y, w, h, outline, fill, text
+                          70, 30, TFT_WHITE, TFT_BLUE, TFT_WHITE,
+                          "MENU", KEY_TEXTSIZE);
+                          
+  menu.drawButton();
+
+  if(menu.contains(x,y)){
+
+    current_display = MENU;
     return;
     
   }
@@ -178,4 +204,25 @@ void touch_calibrate() {
       f.close();
     }
   }
+}
+
+void add_test_file() {
+
+  if (SPIFFS.exists("/testIRdata.txt")) return;
+  
+  File fileToAppend = SPIFFS.open("/testIRdata.txt", FILE_APPEND);
+  
+  if(!fileToAppend){
+      Serial.println("There was an error opening the file for appending");
+      return;
+  }
+  
+  if(fileToAppend.println("test,0x472983")){
+      Serial.println("File content was appended");
+  } else {
+      Serial.println("File append failed");
+  }
+  
+  fileToAppend.close();
+
 }
