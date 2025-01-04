@@ -68,6 +68,9 @@ void loop() {
   bool pressed = tft.getTouch(&x, &y);
   
   if(pressed){
+    
+    tft.fillScreen(TFT_BLACK);
+    
     switch (current_display){
   
       case MENU:
@@ -81,10 +84,6 @@ void loop() {
     }
   }
 
-  if (prev_display != current_display){
-    tft.fillScreen(TFT_BLACK);
-  }
-
   prev_display = current_display;
 
   delay(10);
@@ -94,18 +93,32 @@ void handle_menu(uint16_t x, uint16_t y) {
 
   tft.setFreeFont(LABEL1_FONT);
   
-  load.initButton(&tft, 50,
-                          30, // x, y, w, h, outline, fill, text
-                          100, 30, TFT_WHITE, TFT_BLUE, TFT_WHITE,
+  load.initButton(&tft, 80,
+                          120, // x, y, w, h, outline, fill, text
+                          120, 30, TFT_WHITE, TFT_BLUE, TFT_WHITE,
                           "LOAD", KEY_TEXTSIZE);
     
-  collect.initButton(&tft, 170,
-                          30, // x, y, w, h, outline, fill, text
-                          100, 30, TFT_WHITE, TFT_BLUE, TFT_WHITE,
+  collect.initButton(&tft, 240,
+                          120, // x, y, w, h, outline, fill, text
+                          120, 30, TFT_WHITE, TFT_BLUE, TFT_WHITE,
                           "WRITE", KEY_TEXTSIZE);
                           
   load.drawButton();
   collect.drawButton();
+
+  if(load.contains(x,y)){
+
+    current_display = LOAD;
+    return;
+    
+  }
+
+  if(collect.contains(x,y)){
+
+    current_display = WRITE;
+    return;
+    
+  }
   
 }
 
