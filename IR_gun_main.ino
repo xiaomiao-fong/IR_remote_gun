@@ -2,6 +2,7 @@
 
 #include <SPI.h>
 #include <TFT_eSPI.h>      // Hardware-specific library
+#include <string.h>
 
 TFT_eSPI tft = TFT_eSPI(); // Invoke custom library
 
@@ -30,7 +31,12 @@ enum DISPLAY_STATE {
 DISPLAY_STATE current_display;
 DISPLAY_STATE prev_display;
 
-TFT_eSPI_Button load, collect;
+TFT_eSPI_Button load, collect, menu;
+TFT_eSPI_Button bullets[4];
+
+int datacount = 0;
+int current_bullet = 0;
+char datam[100][64];
 
 void setup() {
   
@@ -42,6 +48,8 @@ void setup() {
     SPIFFS.format();
     SPIFFS.begin();
   }
+  
+  add_test_file();
 
   // Initialise the TFT screen
   tft.init();
@@ -75,6 +83,14 @@ void loop() {
   
       case MENU:
         handle_menu(x,y);
+        break;
+
+      case LOAD:
+        handle_load(x,y);
+        break;
+      
+      case WRITE:
+        handle_write(x,y);
         break;
 
       default:
@@ -120,6 +136,117 @@ void handle_menu(uint16_t x, uint16_t y) {
     
   }
   
+}
+
+void handle_load(uint16_t x, uint16_t y) {
+
+  tft.setFreeFont(LABEL1_FONT);
+
+  if (SPIFFS.exists("/testIRdata.txt")){
+
+    datacount = 0;
+
+    File IRdata = SPIFFS.open("/testIRdata.txt", FILE_READ);
+
+    while (IRdata.available()){
+
+      long long l = IRdata.readBytesUntil('\n', datam[datacount], sizeof(datam[datacount]));
+      datam[datacount][l] = 0;
+      ++datacount;
+      
+    }
+    
+  }
+  
+  menu.initButton(&tft, 50,
+                          30, // x, y, w, h, outline, fill, text
+                          80, 30, TFT_WHITE, TFT_BLUE, TFT_WHITE,
+                          "MENU", KEY_TEXTSIZE);
+                          
+  menu.drawButton();
+
+  if(menu.contains(x,y)){
+
+    current_display = MENU;
+    return;
+    
+  }
+
+  tft.drawLine(100,0,100,240,TFT_BLUE);
+  tft.drawString(String("No.") + String(current_bullet+1), 20, 180);
+
+  if(!datacount) return;
+
+
+  for(byte i = 0; i < min(datacount,4); ++i){
+
+    bullets[i].initButton(&tft, 125 + 40,
+                          30 + 55*i, // x, y, w, h, outline, fill, text
+                          80, 50, TFT_WHITE, TFT_BLUE, TFT_WHITE,
+                          datam[i], KEY_TEXTSIZE);
+    
+    bullets[i].drawButton();
+    /*
+    bool first = 1;
+    char* token;
+    token = strtok(datam[i], ",");
+
+    while( token != NULL ){
+
+      tft.drawString(token, 125, 10 + i*(55) + ((first) ? 0 : 25));
+      token = strtok(NULL, ",");
+      first = 0;
+      
+    }*/
+    
+  }
+
+  return;
+  
+}
+
+void handle_write(uint16_t x, uint16_t y){
+   
+   tft.setFreeFont(LABEL1_FONT);
+
+  if (SPIFFS.exists("/testIRdata.txt")){
+
+    datacount = 0;
+
+    File IRdata = SPIFFS.open("/testIRdata.txt", FILE_APPEND);
+    
+    long long Indata; 
+//    Indata = Serial.read();
+    Indata = 123;
+    char name_[] = "name";
+    
+    if(IRdata.print(name_) && IRdata.print(",0x") && IRdata.println(Indata,HEX)){
+      Serial.print(name_);
+      Serial.print(",0x");
+      Serial.println(Indata, HEX);
+    }else{
+      Serial.println("Nooo");
+    }
+
+    
+    IRdata.close();
+  }
+  
+  menu.initButton(&tft, 50,
+                          30, // x, y, w, h, outline, fill, text
+                          80, 30, TFT_WHITE, TFT_BLUE, TFT_WHITE,
+                          "MENU", KEY_TEXTSIZE);
+                          
+  menu.drawButton();
+
+  if(menu.contains(x,y)){
+
+    current_display = MENU;
+    return;
+    
+  }
+
+  return;
 }
 
 void touch_calibrate() {
@@ -178,4 +305,25 @@ void touch_calibrate() {
       f.close();
     }
   }
+}
+
+void add_test_file() {
+
+  if (!SPIFFS.exists("/testIRdata.txt")) return;
+  
+  File fileToAppend = SPIFFS.open("/testIRdata.txt", FILE_WRITE);
+  
+  if(!fileToAppend){
+      Serial.println("There was an error opening the file for appending");
+      return;
+  }
+  
+  if(fileToAppend.println("test,0x472983")){
+      Serial.println("File content was appended");
+  } else {
+      Serial.println("File append failed");
+  }
+  
+  fileToAppend.close();
+
 }
