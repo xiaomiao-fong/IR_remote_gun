@@ -11,8 +11,14 @@ TFT_eSPI tft = TFT_eSPI(); // Invoke custom library
 #define DECODE_NEC
 #define IR_RECEIVE_PIN 4
 
+#define ENCODER_PIN_A 27
+#define ENCODER_PIN_B 26
+#define IR_SEND_PIN 32
+#define LOAD_PIN 34
+#define SHOOT_PIN 35
+
 #define CALIBRATION_FILE "/TouchCalData1"
-#define REPEAT_CAL 1
+#define REPEAT_CAL 0
 
 #define LABEL1_FONT &FreeSansOblique12pt7b // Key label font 1
 #define LABEL2_FONT &FreeSansBold12pt7b    // Key label font 2
@@ -29,17 +35,23 @@ enum DISPLAY_STATE {
 DISPLAY_STATE current_display;
 DISPLAY_STATE prev_display;
 
+bool sw = 0, prev_sw = 0;
+bool shoot = 0, prev_shoot = 0;
+
+
 TFT_eSPI_Button load, collect, menu;
 TFT_eSPI_Button bullets[4];
 char bulletvalue[6][64];
 char bullethexvalue[6][64];
 
+volatile long encoderValue = 0; 
+volatile unsigned long lastInterruptTime = 0; 
 int datacount = 0;
 int current_bullet = 0;
 char datam[100][64];
 
 void setup() {
-  
+
   // Use serial port
   Serial.begin(115200);
   
@@ -67,14 +79,45 @@ void setup() {
   current_display = MENU;
   handle_menu(0,0);
   IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK); // Start the receiver
+  
+  pinMode(ENCODER_PIN_A, INPUT_PULLUP);
+  pinMode(ENCODER_PIN_B, INPUT_PULLUP);
+  pinMode(IR_SEND_PIN, OUTPUT);
+  pinMode(LOAD_PIN, INPUT); 
+  pinMode(SHOOT_PIN, INPUT); 
+  IrSender.begin(IR_SEND_PIN);
+  
+  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), encoderISR, CHANGE);
 
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  
+
+  sw = digitalRead(LOAD_PIN);
+  shoot = digitalRead(SHOOT_PIN);
   uint16_t x = 0, y = 0; // To store the touch coordinates
   bool pressed = tft.getTouch(&x, &y);
+
+  current_bullet = calculateBlock(encoderValue);
+
+  if(shoot ^ prev_shoot){
+
+    long rawData = 0;
+    for(byte i = 2; bullethexvalue[current_bullet][i] != 0; ++i){
+
+      long temp = bullethexvalue[current_bullet][i] - ((bullethexvalue[current_bullet][i] > '9') ? '7' : '0');
+      rawData = rawData*16 + temp;
+      
+    }
+
+    IrSender.sendNECRaw(rawData, 1);
+    Serial.println(rawData, HEX);
+    
+  }
+
+  prev_sw = sw;
+  prev_shoot = shoot;
   
   if(pressed){
     
@@ -355,4 +398,42 @@ void add_test_file() {
   
   fileToAppend.close();
 
+}
+void encoderISR() {
+  unsigned long interruptTime = millis();
+  if (interruptTime - lastInterruptTime > 5) { // 防反彈時間 5ms
+    bool A = digitalRead(ENCODER_PIN_A);
+    bool B = digitalRead(ENCODER_PIN_B);
+
+    // 判斷方向
+    if (A != B) {
+      encoderValue++; // 順時針
+    } else {
+      encoderValue--; // 逆時針
+    }
+
+    if (encoderValue > 17) {
+      encoderValue -= 17;
+    } else if (encoderValue < 0) {
+      encoderValue += 17;
+    }
+  }
+
+  lastInterruptTime = interruptTime;
+}
+
+int calculateBlock(long value) {
+  if (value >= 0 && value <= 2) {
+    return 0; // 區塊 1
+  } else if (value >= 3 && value <= 5) {
+    return 1; // 區塊 2
+  } else if (value >= 6 && value <= 8) {
+    return 2; // 區塊 3
+  } else if (value >= 9 && value <= 11) {
+    return 3; // 區塊 4
+  } else if (value >= 12 && value <= 14) {
+    return 4; // 區塊 5
+  } else if (value >= 15 && value <= 17){
+    return 5; // 區塊 6
+  }
 }
