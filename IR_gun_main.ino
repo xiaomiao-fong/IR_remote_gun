@@ -3,8 +3,13 @@
 #include <SPI.h>
 #include <TFT_eSPI.h>      // Hardware-specific library
 #include <string.h>
+//#define DECODE_DENON
+#include <IRremote.hpp>
 
 TFT_eSPI tft = TFT_eSPI(); // Invoke custom library
+
+#define DECODE_NEC
+#define IR_RECEIVE_PIN 4
 
 #define CALIBRATION_FILE "/TouchCalData1"
 #define REPEAT_CAL 1
@@ -13,13 +18,6 @@ TFT_eSPI tft = TFT_eSPI(); // Invoke custom library
 #define LABEL2_FONT &FreeSansBold12pt7b    // Key label font 2
 
 #define KEY_TEXTSIZE 1   // Font size multiplier
-
-#define DISP_X 1
-#define DISP_Y 10
-#define DISP_W 238
-#define DISP_H 50
-#define DISP_TSIZE 3
-#define DISP_TCOLOR TFT_CYAN
 
 enum DISPLAY_STATE {
   MENU,
@@ -33,6 +31,8 @@ DISPLAY_STATE prev_display;
 
 TFT_eSPI_Button load, collect, menu;
 TFT_eSPI_Button bullets[4];
+char bulletvalue[6][64];
+char bullethexvalue[6][64];
 
 int datacount = 0;
 int current_bullet = 0;
@@ -66,6 +66,7 @@ void setup() {
   prev_display = LOAD;
   current_display = MENU;
   handle_menu(0,0);
+  IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK); // Start the receiver
 
 }
 
@@ -172,20 +173,40 @@ void handle_load(uint16_t x, uint16_t y) {
     
   }
 
+  Serial.println(datacount);
+
   tft.drawLine(100,0,100,240,TFT_BLUE);
-  tft.drawString(String("No.") + String(current_bullet+1), 20, 180);
+  tft.drawString(String("No.") + String(current_bullet+1), 2, 140);
+  tft.drawString(String(bulletvalue[current_bullet]), 2, 180);
 
   if(!datacount) return;
 
 
   for(byte i = 0; i < min(datacount,4); ++i){
 
-    bullets[i].initButton(&tft, 125 + 40,
+    bullets[i].initButton(&tft, 125 + 80,
                           30 + 55*i, // x, y, w, h, outline, fill, text
-                          80, 50, TFT_WHITE, TFT_BLUE, TFT_WHITE,
+                          120, 50, TFT_WHITE, TFT_BLUE, TFT_WHITE,
                           datam[i], KEY_TEXTSIZE);
     
     bullets[i].drawButton();
+    
+    if(bullets[i].contains(x,y)){
+
+      bool first = 1;
+      char* token;
+      token = strtok(datam[i], ",");
+      strcpy(bulletvalue[current_bullet], token);
+  
+      while( token != NULL ){
+
+        //tft.drawString(token, 125, 10 + i*(55) + ((first) ? 0 : 25));
+        if(!first) strcpy(bullethexvalue[current_bullet], token);
+        token = strtok(NULL, ",");
+        first = 0;
+        
+      }
+    }
     /*
     bool first = 1;
     char* token;
@@ -208,6 +229,10 @@ void handle_load(uint16_t x, uint16_t y) {
 void handle_write(uint16_t x, uint16_t y){
    
    tft.setFreeFont(LABEL1_FONT);
+   /*if(IrReceiver.decode()){
+     Serial.println(IrReceiver.decodedIRData.decodedRawData, HEX);
+     IrReceiver.resume();
+   }*/
 
   if (SPIFFS.exists("/testIRdata.txt")){
 
@@ -216,8 +241,12 @@ void handle_write(uint16_t x, uint16_t y){
     File IRdata = SPIFFS.open("/testIRdata.txt", FILE_APPEND);
     
     long long Indata; 
+    while(!IrReceiver.decode());
+    Indata = IrReceiver.decodedIRData.decodedRawData;
+    Serial.println(IrReceiver.decodedIRData.decodedRawData, HEX);
+    IrReceiver.resume();
 //    Indata = Serial.read();
-    Indata = 123;
+    ;
     char name_[] = "name";
     
     if(IRdata.print(name_) && IRdata.print(",0x") && IRdata.println(Indata,HEX)){
@@ -309,7 +338,7 @@ void touch_calibrate() {
 
 void add_test_file() {
 
-  if (!SPIFFS.exists("/testIRdata.txt")) return;
+  //if (!SPIFFS.exists("/testIRdata.txt")) return;
   
   File fileToAppend = SPIFFS.open("/testIRdata.txt", FILE_WRITE);
   
