@@ -3,8 +3,13 @@
 #include <SPI.h>
 #include <TFT_eSPI.h>      // Hardware-specific library
 #include <string.h>
+//#define DECODE_DENON
+#include <IRremote.hpp>
 
 TFT_eSPI tft = TFT_eSPI(); // Invoke custom library
+
+#define DECODE_NEC
+#define IR_RECEIVE_PIN 4
 
 #define CALIBRATION_FILE "/TouchCalData1"
 #define REPEAT_CAL 1
@@ -61,6 +66,7 @@ void setup() {
   prev_display = LOAD;
   current_display = MENU;
   handle_menu(0,0);
+  IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK); // Start the receiver
 
 }
 
@@ -223,6 +229,10 @@ void handle_load(uint16_t x, uint16_t y) {
 void handle_write(uint16_t x, uint16_t y){
    
    tft.setFreeFont(LABEL1_FONT);
+   /*if(IrReceiver.decode()){
+     Serial.println(IrReceiver.decodedIRData.decodedRawData, HEX);
+     IrReceiver.resume();
+   }*/
 
   if (SPIFFS.exists("/testIRdata.txt")){
 
@@ -231,8 +241,12 @@ void handle_write(uint16_t x, uint16_t y){
     File IRdata = SPIFFS.open("/testIRdata.txt", FILE_APPEND);
     
     long long Indata; 
+    while(!IrReceiver.decode());
+    Indata = IrReceiver.decodedIRData.decodedRawData;
+    Serial.println(IrReceiver.decodedIRData.decodedRawData, HEX);
+    IrReceiver.resume();
 //    Indata = Serial.read();
-    Indata = 123;
+    ;
     char name_[] = "name";
     
     if(IRdata.print(name_) && IRdata.print(",0x") && IRdata.println(Indata,HEX)){
